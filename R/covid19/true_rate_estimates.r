@@ -15,7 +15,26 @@ hubei_pop <- 58.5e6
 italy_pop <- 60.5e6
 days_onset2death <- 21
 
-cv_hubei <- cov_sum[, .(region = province, obs, deaths)]
+cv_estimates <- cov_sum[deaths>0]
+View(cv_estimates[, table(country)])
+View(cv_estimates[, table(province)])
+
+tbl_prov <- cv_estimates[, .(.N), by = 'province']
+tbl_country <- cv_estimates[, .(.N), by = 'country']
+
+provinces <- c('Hubei', 'Hebei', 'Shanghai', 'Beijing')
+countries <- c('Philippines', 'France', 'Italy', 'Thailand', 'Spain', 'UK')
+
+exp_countries <- c('France', 'Italy', 'Thailand', 'Spain', 'UK')
+contained <- c('Hong Kong', 'Japan', 'Thailand', 'Philippines')
+
+ggplot(cv_estimates[country %in% countries], aes(obs, deaths, colour=country)) + geom_point() + geom_line() +
+  scale_y_log10()
+
+ggplot(cv_estimates[province %in% provinces], aes(obs, deaths, colour=province)) + geom_point() + geom_line() +
+  scale_y_log10()
+
+ggplot(cv_estimates[country %in% contained], aes(obs, deaths)) + geom_point() + geom_line() + facet_wrap(~country)
 
 ##################################################################################################
 #

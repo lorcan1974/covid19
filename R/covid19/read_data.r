@@ -76,8 +76,6 @@ country_pop <- fread(
 names(country_pop) <- c('code', 'pop')
 country_pop$pop <- as.numeric(country_pop$pop)
 
-
-
 ##########################################################################################
 #
 # Bump all the data together, rollup by country.
