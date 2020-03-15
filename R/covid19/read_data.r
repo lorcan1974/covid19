@@ -4,7 +4,9 @@ library(lubridate)
 library(ggplot2)
 library(stringr)
 
-data_path <- 'dataset20200312'
+data_path <- 'datasets'
+worldbank_data <- file.path(data_path, 'worldbank')
+kaggle_data <- file.path(data_path, 'kaggle20200314')
 
 ##########################################################################################
 #
@@ -15,24 +17,16 @@ data_path <- 'dataset20200312'
 ##########################################################################################
 
 cov_sum <- fread(
-  file.path(data_path, 'covid_19_data.csv'), drop=c('SNo', 'Last Update', 'Recovered')
+  file.path(kaggle_data, 'covid_19_data.csv'), drop=c('SNo', 'Last Update', 'Recovered')
 )[, ObservationDate:=parse_date_time(ObservationDate, orders = c('m/d/y', 'm/d/Y'))]
 
 names(cov_sum) <- c('obs', 'province', 'country', 'confirmed', 'deaths')
 cov_sum <- cov_sum[, c('obs', 'confirmed', 'deaths'):=list(as.Date(obs), as.numeric(confirmed), as.numeric(deaths))]
 
-# Updates for Italy:
-cov_sum <- rbind(cov_sum, 
-                     data.table(
-                       obs = c(as.Date('2020-03-12'), as.Date('2020-03-13')),
-                       province = '',
-                       country = 'Italy',
-                       confirmed = c(15113, 17600),
-                       deaths = c(1016, 1266)
-                     )
-)
-
+# Correction for Italy required in the kaggle20200314 dataset:
+cov_sum[country=='Italy' & obs=='2020-03-12', c('confirmed', 'deaths'):=list(15113, 1016)]
 # tail(cov_sum[country=='Italy'][order(obs)])
+# tail(cov_sum[country=='Ireland'][order(obs)])
 
 ##########################################################################################
 #
@@ -71,7 +65,7 @@ names(ccodes) <- c('country', 'code', 'policy')
 ##########################################################################################
 
 country_pop <- fread(
-  file.path(data_path, 'API_SP.POP.TOTL_DS2_en_csv_v2_821007.csv'),
+  file.path(worldbank_data, 'API_SP.POP.TOTL_DS2_en_csv_v2_821007.csv'),
   select = c('Country Code', '2018'))
 names(country_pop) <- c('code', 'pop')
 country_pop$pop <- as.numeric(country_pop$pop)
