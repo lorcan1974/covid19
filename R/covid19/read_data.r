@@ -6,7 +6,7 @@ library(stringr)
 
 data_path <- 'datasets'
 worldbank_data <- file.path(data_path, 'worldbank')
-kaggle_data <- file.path(data_path, 'kaggle20200314')
+kaggle_data <- file.path(data_path, 'kaggle20200317_v35')
 
 ##########################################################################################
 #
@@ -22,6 +22,13 @@ cov_sum <- fread(
 
 names(cov_sum) <- c('obs', 'province', 'country', 'confirmed', 'deaths')
 cov_sum <- cov_sum[, c('obs', 'confirmed', 'deaths'):=list(as.Date(obs), as.numeric(confirmed), as.numeric(deaths))]
+
+# Tidy up some weirdness in the Province field:
+cov_sum[province==country, province:='']
+cov_sum[province=='' & country=='UK', province:='United Kingdom']
+
+# Correction required for Ireland:
+cov_sum[country=='Ireland' & obs=='2020-03-15', c('confirmed', 'deaths'):=list(169, 2)]
 
 # Correction for Italy required in the kaggle20200314 dataset:
 cov_sum[country=='Italy' & obs=='2020-03-12', c('confirmed', 'deaths'):=list(15113, 1016)]
@@ -76,11 +83,40 @@ country_pop$pop <- as.numeric(country_pop$pop)
 # (I did some analysis of Province, mostly everything in China maps to Hubei, so I abandoned that idea.)
 #
 ##########################################################################################
-cv_country <- cov_sum[, 
-                      lapply(.SD, sum), 
-                      .SDcols = c('confirmed', 'deaths'),
-                      by = c('obs', 'country')] %>%
-  melt(id.vars = c('obs', 'country'), variable.name = 'outcome', value.name = 'count') %>%
+
+cv_with_pop <- cov_sum %>%
   merge(ccodes, by = 'country') %>%
-  merge(country_pop, by = 'code') %>%
-  `[`(T, rate:=count/pop)
+  merge(country_pop, by = 'code')
+
+##############################################################################
+#
+# Some errors parsing dates - am leaving these out for now:
+#
+##############################################################################
+
+# cov_open <- fread(
+#   file.path(kaggle_data, 'COVID19_open_line_list.csv'), 
+#   select = c('age', 'sex', 'country', 'date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'symptoms', 'date_death_or_discharge', 'outcome')
+# )[, c('onset', 'admission', 'confirmed', 'death_or_discharge'):=lapply(.SD, parse_date_time, orders = c('d.m.Y', 'd.m.y')), 
+#   .SDcols = c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge')][
+#     , c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge'):=NULL
+#     ][, c('tt_confirm', 'tt_resolve'):=
+#         list(
+#           as.numeric(difftime(confirmed, onset, units = 'days')), 
+#           as.numeric(difftime(death_or_discharge, onset, units = 'days'))
+#         )
+#       ]
+# 
+# cov_line <- fread(
+#   file.path(kaggle_data, 'COVID19_line_list_data.csv'),
+#   select = c('summary', 'country', 'gender', 'age', 'death', 'recovered', 'reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')
+# )[, c('reported', 'onset', 'hospitalised', 'exposure_start', 'exposure_end'):=lapply(.SD, parse_date_time, orders = c('m/d/Y', 'm/d/y')), 
+#   .SDcols = c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')][
+#     , c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end'):=NULL
+#     ][, c('tt_hosp', 'tt_report'):=
+#         list(
+#           as.numeric(difftime(hospitalised, onset, units = 'days')), 
+#           as.numeric(difftime(reported, onset, units = 'days'))
+#         )
+#       ]
+
