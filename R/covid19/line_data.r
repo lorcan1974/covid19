@@ -8,18 +8,7 @@
 #
 ##########################################################################################
 
-cov_open <- fread(
-  file.path(data_path, 'COVID19_open_line_list.csv'), 
-  select = c('age', 'sex', 'country', 'date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'symptoms', 'date_death_or_discharge', 'outcome')
-)[, c('onset', 'admission', 'confirmed', 'death_or_discharge'):=lapply(.SD, parse_date_time, orders = c('d.m.Y', 'd.m.y')), 
-  .SDcols = c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge')][
-    , c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge'):=NULL
-    ][, c('tt_confirm', 'tt_resolve'):=
-        list(
-          as.numeric(difftime(confirmed, onset, units = 'days')), 
-          as.numeric(difftime(death_or_discharge, onset, units = 'days'))
-        )
-      ]
+source('read_data.r')
 
 ggplot(cov_open[tt_resolve>=0 & outcome=='death'], aes(tt_resolve)) + geom_histogram(binwidth = 1, boundary = 1)
 ggplot(cov_open[tt_confirm>=0], aes(tt_confirm)) + geom_histogram(binwidth = 1, boundary = 1)
@@ -39,21 +28,6 @@ cov_open[outcome=='death' & !is.na(tt_resolve)]
 # This didn't have much obviously useful either.
 #
 ##########################################################################################
-
-cov_line <- fread(
-  file.path(data_path, 'COVID19_line_list_data.csv'),
-  select = c('summary', 'country', 'gender', 'age', 'death', 'recovered', 'reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')
-)[, c('reported', 'onset', 'hospitalised', 'exposure_start', 'exposure_end'):=lapply(.SD, parse_date_time, orders = c('m/d/Y', 'm/d/y')), 
-  .SDcols = c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')][
-    , c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end'):=NULL
-    ][, c('tt_hosp', 'tt_report'):=
-        list(
-          as.numeric(difftime(hospitalised, onset, units = 'days')), 
-          as.numeric(difftime(reported, onset, units = 'days'))
-        )
-      ]
-
-
 
 ggplot(cov_line[tt_hosp>=0], aes(tt_hosp)) + geom_histogram(binwidth = 1, boundary = 1)
 ggplot(cov_line[tt_report>=0], aes(tt_report)) + geom_histogram(binwidth = 1, boundary = 1)
