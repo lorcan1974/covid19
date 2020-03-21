@@ -12,7 +12,7 @@
 
 library(broom)
 
-picture_path <- 'pictures'
+picture_path <- file.path('pictures', 'mortality_rates')
 
 ##################################################################################################
 #

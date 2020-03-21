@@ -6,7 +6,7 @@ library(stringr)
 
 data_path <- 'datasets'
 worldbank_data <- file.path(data_path, 'worldbank')
-kaggle_data <- file.path(data_path, 'kaggle20200317_v35')
+kaggle_data <- file.path(data_path, 'kaggle20200320_v38')
 
 ##########################################################################################
 #
@@ -25,7 +25,13 @@ cov_sum <- cov_sum[, c('obs', 'confirmed', 'deaths'):=list(as.Date(obs), as.nume
 
 # Tidy up some weirdness in the Province field:
 cov_sum[province==country, province:='']
+
+# The UK now makes use of the Province field - drop all UK that is not 'United Kingdom'
 cov_sum[province=='' & country=='UK', province:='United Kingdom']
+cov_sum <- cov_sum[country!='UK' | (country=='UK' & province=='United Kingdom')]
+
+# France now makes use of the Province field to signify overseas territories - drop everything that is not blank
+cov_sum <- cov_sum[country!='France' | (country=='France' & province=='')]
 
 # Correction required for Ireland:
 cov_sum[country=='Ireland' & obs=='2020-03-15', c('confirmed', 'deaths'):=list(169, 2)]
@@ -94,29 +100,29 @@ cv_with_pop <- cov_sum %>%
 #
 ##############################################################################
 
-# cov_open <- fread(
-#   file.path(kaggle_data, 'COVID19_open_line_list.csv'), 
-#   select = c('age', 'sex', 'country', 'date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'symptoms', 'date_death_or_discharge', 'outcome')
-# )[, c('onset', 'admission', 'confirmed', 'death_or_discharge'):=lapply(.SD, parse_date_time, orders = c('d.m.Y', 'd.m.y')), 
-#   .SDcols = c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge')][
-#     , c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge'):=NULL
-#     ][, c('tt_confirm', 'tt_resolve'):=
-#         list(
-#           as.numeric(difftime(confirmed, onset, units = 'days')), 
-#           as.numeric(difftime(death_or_discharge, onset, units = 'days'))
-#         )
-#       ]
+cov_open <- fread(
+  file.path(kaggle_data, 'COVID19_open_line_list.csv'),
+  select = c('age', 'sex', 'country', 'date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'symptoms', 'date_death_or_discharge', 'outcome')
+)[, c('onset', 'admission', 'confirmed', 'death_or_discharge'):=lapply(.SD, parse_date_time, orders = c('d.m.Y', 'd.m.y'), quiet=TRUE),
+  .SDcols = c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge')][
+    , c('date_onset_symptoms', 'date_admission_hospital', 'date_confirmation', 'date_death_or_discharge'):=NULL
+    ][, c('tt_confirm', 'tt_resolve'):=
+        list(
+          as.numeric(difftime(confirmed, onset, units = 'days')),
+          as.numeric(difftime(death_or_discharge, onset, units = 'days'))
+        )
+      ]
 # 
-# cov_line <- fread(
-#   file.path(kaggle_data, 'COVID19_line_list_data.csv'),
-#   select = c('summary', 'country', 'gender', 'age', 'death', 'recovered', 'reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')
-# )[, c('reported', 'onset', 'hospitalised', 'exposure_start', 'exposure_end'):=lapply(.SD, parse_date_time, orders = c('m/d/Y', 'm/d/y')), 
-#   .SDcols = c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')][
-#     , c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end'):=NULL
-#     ][, c('tt_hosp', 'tt_report'):=
-#         list(
-#           as.numeric(difftime(hospitalised, onset, units = 'days')), 
-#           as.numeric(difftime(reported, onset, units = 'days'))
-#         )
-#       ]
+cov_line <- fread(
+  file.path(kaggle_data, 'COVID19_line_list_data.csv'),
+  select = c('summary', 'country', 'gender', 'age', 'death', 'recovered', 'reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')
+)[, c('reported', 'onset', 'hospitalised', 'exposure_start', 'exposure_end'):=lapply(.SD, parse_date_time, orders = c('m/d/Y', 'm/d/y'), quiet=TRUE),
+  .SDcols = c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end')][
+    , c('reporting date', 'symptom_onset', 'hosp_visit_date', 'exposure_start', 'exposure_end'):=NULL
+    ][, c('tt_hosp', 'tt_report'):=
+        list(
+          as.numeric(difftime(hospitalised, onset, units = 'days')),
+          as.numeric(difftime(reported, onset, units = 'days'))
+        )
+      ]
 
