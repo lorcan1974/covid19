@@ -9,7 +9,16 @@ hp <- cv_with_pop[, .(.N, x = max(deaths)), by = 'province'][order(x, decreasing
 
 high_countries_c <- c('ITA', 'ESP', 'DEU', 'FRA', 'KOR', 'CHE', 'GBR', 'NLD', 'AUT', 'BEL', 'DNK', 'MYS', 'IRL')
 high_countries_d <- c('ITA', 'ESP', 'FRA', 'KOR')
-high_provinces <- c('Hubei')
+
+countries_by_province <- c('USA', 'CHN', 'AUS', 'CAN')
+
+high_countries_c <- setdiff(hc_c$code, countries_by_province)
+eu_countries <- c('AUT', 'BEL', 'CHE', 'DEU', 'DNK', 'ESP', 'FIN', 'FRA', 'GBR', 'GRC', 'IRL', 'ITA', 'NLD', 'PRT')
+high_countries_noneu <- setdiff(high_countries_c, eu_countries)
+high_countries_eu <- intersect(high_countries_c, eu_countries)
+
+high_countries_d <- setdiff(hc_d$code, c('USA', 'CHN', 'AUS'))
+high_provinces <- c('Hubei', 'New York', 'Washington')
 
 #
 # Assuming y ~ Kexp(rt), then log|y| ~ log|K| + r*t
@@ -29,6 +38,20 @@ smooth_rate <- function(x, k = 7) {
   ifelse(is.na(pval) | pval<0.05, drate, NA_real_)
 }
 
+rate_fun_lin <- function(x) {
+  summary(lm((x)~seq_along(x)))$coefficients[2,1]
+}
+
+pval_fun_lin <- function(x) {
+  summary(lm((x)~seq_along(x)))$coefficients[2,4]
+}
+
+smooth_rate_lin <- function(x, k = 7) {
+  drate <- rollapply(x, k, rate_fun_lin, fill=NA, align = 'right')
+  pval <- rollapply(x, k, pval_fun_lin, fill=NA, align = 'right')
+  ifelse(is.na(pval) | pval<0.05, drate, NA_real_)
+}
+
 d_rates <- rbind(
   cv_with_pop[code %in% high_countries_d, .(region=country, obs, y = deaths)],
   cv_with_pop[province %in% high_provinces, .(region=province, obs, y = deaths)]
@@ -37,11 +60,100 @@ d_rates <- rbind(
   ]
 
 c_rates <- rbind(
-  cv_with_pop[code %in% high_countries_c, .(region=country, obs, y = confirmed)],
-  cv_with_pop[province %in% high_provinces, .(region=province, obs, y = confirmed)]
+  cv_with_pop[code %in% high_countries_c, .(region=code, obs, y = confirmed, pop)],
+  cv_with_pop[province %in% high_provinces, .(region=province, obs, y = confirmed, pop)]
 )[y>30][
-  order(obs), y_rate:=smooth_rate(y, k=5) , by = 'region'
+  order(obs), c('y_rate', 'delta_y'):=list(smooth_rate(y, k=5), rollmean(c(NA, diff(y)), k=5, fill=NA)) , by = 'region'
   ]
+
+c_rates <- c_rates[, c('y_pm', 'delta_y_pm'):=list(y/pop, delta_y/pop)]
+
+p_test_v_burden <- ggplot(mapping = aes(obs, delta_y_pm, colour = region)) + geom_point() + geom_line() +
+  scale_y_log10()
+
+p_test_v_burden %+% c_rates[region %in% high_countries_eu & !is.na(delta_y) & region<='DNK']
+p_test_v_burden %+% c_rates[region %in% high_countries_eu & !is.na(delta_y) & region>'DNK' & region<='GRC']
+p_test_v_burden %+% c_rates[region %in% high_countries_eu & !is.na(delta_y) & region>'GRC']
+
+p_test_v_burden %+% c_rates[(region %in% high_countries_noneu | region %in% high_provinces) & !is.na(delta_y)]
+
+#############################################################################
+#
+# Rates all on the one plot
+#
+#############################################################################
+
+p_rate <- ggplot(mapping = aes(obs, y_rate, colour = region)) + geom_point() + geom_line() + 
+  scale_y_continuous(labels = scales::percent_format(accuracy = 5L), limits = c(0, NA)) +
+  labs(
+    x = "Date",
+    y = "Case growth rate",
+    colour = "Region"
+  ) + geom_hline(yintercept = 0.05, colour = 'red', size = 1) 
+
+  # geom_text(mapping = aes(x = as.Date('2020-03-13'), y = 0.08, label = "Losing"), colour = 'black') +
+  # geom_text(mapping = aes(x = as.Date('2020-03-13'), y = 0.03, label = "Winning"), colour = 'black')
+
+p_rate %+% c_rates[!is.na(y_rate) & region %in% c(high_countries_noneu, 'Hubei')]
+
+r_oscilate <- c('MYS', 'ISR', 'AUT', 'BEL', 'CHE', 'DEU', 'ESP', 'FRA', 'GBR', 'GRC', 'IRL', 'NLD', 'PRT')
+r_down <- c('DNK', 'FIN', 'KOR', 'JPN', 'Hubei', 'ITA')
+
+r_earliest <- c_rates[region %in% r_oscilate, .(obs=min(obs)), by = 'region'][order(obs)]
+
+p_rate %+% c_rates[!is.na(y_rate) & region %in% r_down & obs>='2020-02-15']
+p_rate %+% 
+  merge(c_rates[!is.na(y_rate) & region %in% r_oscilate], 
+        r_earliest[obs<='2020-03-03', .(region)], 
+        by = 'region')
+
+p_rate %+% 
+  merge(c_rates[!is.na(y_rate) & region %in% r_oscilate], 
+        r_earliest[obs>'2020-03-03', .(region)], 
+        by = 'region')
+
+
+p_rate %+% c_rates[!is.na(y_rate) & region %in% high_countries_eu & region %in% c('GRC')]
+p_rate %+% c_rates[!is.na(y_rate) & region %in% high_countries_eu & region<='DNK']
+p_rate %+% c_rates[!is.na(y_rate) & region %in% high_countries_eu & region>'GRC' & region<='Z'] + labs(y = "Case growth rate")
+
+p_rate %+% c_rates[!is.na(y_rate) & region %in% high_countries_eu] + labs(y = "Case growth rate")
+p_rate %+% d_rates[!is.na(y_rate) & obs>='2020-03-02'] + labs(y = "Mortality growth rate")
+
+#############################################################################
+#
+# Cases/Deaths per million by region
+#
+#############################################################################
+
+p_pm <- ggplot(mapping = aes(obs, y/pop, colour = region)) + geom_point() + geom_line() + 
+  # scale_y_continuous(trans=log_trans(), labels = comma_format()) +
+  scale_y_log10() +
+  # scale_y_continuous(labels = comma_format()) +
+  labs(
+    x = "Date",
+    y = "Cases per million",
+    colour = "Region"
+  )
+
+p_pm %+% c_rates[!is.na(y) & region %in% high_countries_eu]
+
+p_pm %+% c_rates[!is.na(y_rate) & region %in% r_down & obs>='2020-02-15']
+p_pm %+% 
+  merge(c_rates[!is.na(y_rate) & region %in% r_oscilate], 
+        r_earliest[obs<='2020-03-03', .(region)], 
+        by = 'region')
+
+p_pm %+% 
+  merge(c_rates[!is.na(y_rate) & region %in% r_oscilate], 
+        r_earliest[obs>'2020-03-03', .(region)], 
+        by = 'region')
+
+#############################################################################
+#
+# Split the rates out by region
+#
+#############################################################################
 
 growth_plots <- function(location, cv_rates, picture_path, p1y, p2y, ptitle, fname_prefix) {
   stopifnot(location %in% cv_rates$region)

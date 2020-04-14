@@ -1,12 +1,7 @@
-library(data.table)
-library(purrr)
-library(lubridate)
-library(ggplot2)
-library(stringr)
+source('setup.r')
 
-data_path <- 'datasets'
 worldbank_data <- file.path(data_path, 'worldbank')
-kaggle_data <- file.path(data_path, 'kaggle20200320_v38')
+kaggle_data <- file.path(data_path, 'kaggle20200329_v49')
 
 ##########################################################################################
 #
@@ -25,13 +20,12 @@ cov_sum <- cov_sum[, c('obs', 'confirmed', 'deaths'):=list(as.Date(obs), as.nume
 
 # Tidy up some weirdness in the Province field:
 cov_sum[province==country, province:='']
+cov_sum[province=='United Kingdom', province:='']
 
-# The UK now makes use of the Province field - drop all UK that is not 'United Kingdom'
-cov_sum[province=='' & country=='UK', province:='United Kingdom']
-cov_sum <- cov_sum[country!='UK' | (country=='UK' & province=='United Kingdom')]
+countries_by_province <- c('USA', 'CHN', 'AUS', 'CAN')
 
-# France now makes use of the Province field to signify overseas territories - drop everything that is not blank
-cov_sum <- cov_sum[country!='France' | (country=='France' & province=='')]
+# Countries reporting provinces are often overseas provinces that mess things up.
+# cov_sum <- cov_sum[province %in% c('Hubei', 'New York', 'Washington', '')]
 
 # Correction required for Ireland:
 cov_sum[country=='Ireland' & obs=='2020-03-15', c('confirmed', 'deaths'):=list(169, 2)]
@@ -93,6 +87,15 @@ country_pop$pop <- as.numeric(country_pop$pop)
 cv_with_pop <- cov_sum %>%
   merge(ccodes, by = 'country') %>%
   merge(country_pop, by = 'code')
+
+# Fix up populations for those provinces we're going to use:
+
+hubei_pop <- 58.5e6
+ny_pop <- 19.5e6
+wash_pop <- 7.5e6
+cv_with_pop[province=='Hubei', pop:=hubei_pop]  # Otherwise it's the population of all China
+cv_with_pop[province=='New York', pop:=ny_pop]
+cv_with_pop[province=='Washington', pop:=wash_pop]
 
 ##############################################################################
 #
